@@ -1,0 +1,10 @@
+{
+  "name": "review-flow",
+  "displayName": "Review Flow",
+  "version": "0.1.0",
+  "description": "Layered code review: local checks, multi-agent review with verifier voting, security pass, risk-tiered human approval, eval loop and metrics.",
+  "author": {
+    "name": "VSmirnov17"
+  },
+  "keywords": ["code-review", "security-review", "pull-requests", "risk-tiers", "evals"]
+}

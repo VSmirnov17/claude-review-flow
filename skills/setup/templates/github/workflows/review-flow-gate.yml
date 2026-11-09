@@ -1,0 +1,42 @@
+name: review-flow-gate
+
+# Computes the required status `review-flow/gate` for the current head commit.
+# It checks out the base commit only and never runs code from the pull request.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  issue_comment:
+    types: [created]
+  merge_group:
+
+permissions: {}
+
+concurrency:
+  group: review-flow-gate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       (startsWith(github.event.comment.body, '/signoff') || startsWith(github.event.comment.body, '/recheck')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { runGate } = await import(`${process.env.GITHUB_WORKSPACE}/.github/review-flow/review-flow.mjs`);
+            await runGate({ github, context, core });

@@ -1,0 +1,7 @@
+# Requests a review from these owners automatically.
+# Keep the paths in step with "always_human" in .github/review-flow/risk-policy.json.
+
+.github/    @__OWNER__
+.claude/    @__OWNER__
+CLAUDE.md   @__OWNER__
+REVIEW.md   @__OWNER__

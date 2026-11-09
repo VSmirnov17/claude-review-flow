@@ -1,0 +1,14 @@
+{
+  "name": "review-flow",
+  "description": "Layered code review process for Claude Code projects.",
+  "owner": {
+    "name": "VSmirnov17"
+  },
+  "plugins": [
+    {
+      "name": "review-flow",
+      "source": "./",
+      "description": "Layered code review: local checks, multi-agent review with verifier voting, security pass, risk-tiered human approval, eval loop and metrics."
+    }
+  ]
+}
