@@ -1,0 +1,16 @@
+name: review-flow-review-event
+
+# Only signals that a review changed. review-flow-gate.yml picks this up through
+# workflow_run and recalculates the gate with a token that can set statuses.
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions: {}
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Review changed. The gate recalculates in review-flow-gate."

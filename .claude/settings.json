@@ -1,0 +1,22 @@
+{
+  "extraKnownMarketplaces": {
+    "review-flow": {
+      "source": {
+        "source": "github",
+        "repo": "VSmirnov17/claude-review-flow"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "review-flow@review-flow": true
+  },
+  "permissions": {
+    "deny": [
+      "Bash(gh pr review --approve*)",
+      "Bash(gh pr review * --approve*)",
+      "Bash(gh pr review -a*)",
+      "Bash(gh pr review * -a*)",
+      "Bash(*/signoff*)"
+    ]
+  }
+}

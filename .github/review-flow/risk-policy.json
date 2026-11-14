@@ -1,0 +1,24 @@
+{
+  "approvals": { "low": 0, "medium": 1, "high": 1 },
+  "max_rounds": 3,
+  "trusted_authors": ["VSmirnov17"],
+  "agent_accounts": [],
+  "floors": {
+    "high": [
+      "skills/setup/templates/github/**",
+      ".claude-plugin/**"
+    ],
+    "medium": [
+      "agents/**",
+      "skills/**"
+    ]
+  },
+  "always_human": [
+    ".github/**",
+    "**/.claude/**",
+    ".mcp.json",
+    "**/CLAUDE.md",
+    "**/CLAUDE.local.md",
+    "**/REVIEW.md"
+  ]
+}

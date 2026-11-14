@@ -1,0 +1,177 @@
+name: review-flow
+
+# Bug review, security review and risk classification for each pushed commit.
+# Claude reads untrusted diffs, so the job that runs it cannot set commit
+# statuses or resolve review threads. A separate job validates its output and
+# does both.
+
+on:
+  pull_request:
+    # `edited` covers a change of base branch, which needs a new classification.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions: {}
+
+# An edit that does not change the base gets its own group, so a title change
+# cannot cancel a review that is in progress.
+concurrency:
+  group: review-flow-${{ github.event.pull_request.number }}-${{ (github.event.action == 'edited' && !github.event.changes.base && github.run_id) || 'review' }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    # Forks get no secrets, and the gate requires a person for them instead.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft &&
+      (github.event.action != 'edited' || github.event.changes.base)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      round: ${{ steps.round.outputs.round }}
+      since: ${{ steps.round.outputs.since }}
+      capped: ${{ steps.round.outputs.capped }}
+      threads: ${{ steps.round.outputs.threads }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - id: round
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { prepareRound } = await import(`${process.env.GITHUB_WORKSPACE}/.github/review-flow/review-flow.mjs`);
+            await prepareRound({ github, context, core });
+
+  review:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    outputs:
+      classification: ${{ steps.classify.outputs.structured_output }}
+      fixed_review: ${{ steps.bugs.outputs.structured_output }}
+      fixed_security: ${{ steps.security.outputs.structured_output }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Claude Code loads CLAUDE.md, .claude/ and .mcp.json from the working
+      # tree. Use the base versions, so a PR cannot change the reviewer's rules
+      # or add hooks and servers that run with this job's secrets. The PR's
+      # changes to these files stay visible through git diff.
+      - name: Use review configuration from the base commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff -z --name-only --no-renames "$BASE" HEAD -- .claude .mcp.json \
+            ':(glob)**/CLAUDE.md' ':(glob)**/CLAUDE.local.md' ':(glob)**/REVIEW.md' |
+          while IFS= read -r -d '' path; do
+            if git cat-file -e "$BASE:$path" 2>/dev/null; then
+              git checkout "$BASE" -- "$path"
+            else
+              rm -f -- "$path"
+            fi
+          done
+
+      - name: Write earlier findings
+        env:
+          THREADS: ${{ needs.prepare.outputs.threads }}
+        run: printf '%s' "$THREADS" > .review-flow-threads.json
+
+      - name: Bug review
+        id: bugs
+        if: needs.prepare.outputs.capped != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: claude[bot]
+          plugin_marketplaces: https://github.com/VSmirnov17/claude-review-flow.git
+          plugins: review-flow@review-flow
+          prompt: >-
+            /review-flow:review ${{ vars.REVIEW_FLOW_MODE || 'standard' }} --post
+            --pr=${{ github.event.pull_request.number }}
+            --base=${{ github.event.pull_request.base.sha }}
+            --head=${{ github.event.pull_request.head.sha }}
+            --round=${{ needs.prepare.outputs.round }}
+            --since=${{ needs.prepare.outputs.since }}
+            --threads=.review-flow-threads.json
+          claude_args: >-
+            --allowedTools "Agent,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
+            --json-schema '{"type":"object","properties":{"fixed_threads":{"type":"array","items":{"type":"string"}}},"required":["fixed_threads"],"additionalProperties":false}'
+
+      - name: Security review
+        id: security
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: claude[bot]
+          plugin_marketplaces: https://github.com/VSmirnov17/claude-review-flow.git
+          plugins: review-flow@review-flow
+          prompt: >-
+            /review-flow:security --post
+            --pr=${{ github.event.pull_request.number }}
+            --base=${{ github.event.pull_request.base.sha }}
+            --head=${{ github.event.pull_request.head.sha }}
+            --since=${{ needs.prepare.outputs.since }}
+            --threads=.review-flow-threads.json
+          claude_args: >-
+            --allowedTools "Agent,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
+            --json-schema '{"type":"object","properties":{"fixed_threads":{"type":"array","items":{"type":"string"}}},"required":["fixed_threads"],"additionalProperties":false}'
+
+      - name: Classify risk
+        id: classify
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: claude[bot]
+          plugin_marketplaces: https://github.com/VSmirnov17/claude-review-flow.git
+          plugins: review-flow@review-flow
+          prompt: >-
+            /review-flow:classify-risk
+            --base=${{ github.event.pull_request.base.sha }}
+            --head=${{ github.event.pull_request.head.sha }}
+          claude_args: >-
+            --allowedTools "Agent,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git merge-base:*)"
+            --json-schema '{"type":"object","properties":{"tier":{"type":"string","enum":["low","medium","high"]},"human_required":{"type":"boolean"},"reasons":{"type":"array","items":{"type":"string"}}},"required":["tier","human_required","reasons"],"additionalProperties":false}'
+
+  publish:
+    needs: [prepare, review]
+    if: ${{ !cancelled() && needs.review.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        env:
+          CLASSIFICATION: ${{ needs.review.outputs.classification }}
+          FIXED_REVIEW: ${{ needs.review.outputs.fixed_review }}
+          FIXED_SECURITY: ${{ needs.review.outputs.fixed_security }}
+          ROUND: ${{ needs.prepare.outputs.round }}
+          CAPPED: ${{ needs.prepare.outputs.capped }}
+        with:
+          script: |
+            const { publishClassification } = await import(`${process.env.GITHUB_WORKSPACE}/.github/review-flow/review-flow.mjs`);
+            await publishClassification({ github, context, core });
