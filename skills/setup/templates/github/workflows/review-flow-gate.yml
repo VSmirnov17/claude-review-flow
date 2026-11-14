@@ -1,22 +1,23 @@
 name: review-flow-gate
 
 # Computes the required status `review-flow/gate` for the current head commit.
-# It checks out the base commit only and never runs code from the pull request.
+# Every trigger here runs with the base or default branch's workflow and code,
+# and none of them runs code from the pull request.
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-  pull_request_review:
-    types: [submitted, edited, dismissed]
+    # `edited` covers a change of base branch.
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited]
   issue_comment:
     types: [created]
+  # Reviews arrive through review-flow-review-event.yml, because a review event
+  # from a fork only gets a read-only token.
+  workflow_run:
+    workflows: [review-flow-review-event]
+    types: [completed]
   merge_group:
 
 permissions: {}
-
-concurrency:
-  group: review-flow-gate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
-  cancel-in-progress: true
 
 jobs:
   gate:
@@ -24,6 +25,11 @@ jobs:
       github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request &&
        (startsWith(github.event.comment.body, '/signoff') || startsWith(github.event.comment.body, '/recheck')))
+    # Job level, so that a skipped run such as an ordinary comment cannot
+    # cancel a recalculation that is in progress.
+    concurrency:
+      group: review-flow-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -42,6 +42,7 @@ Never overwrite an existing file. If a target exists, merge the missing parts in
 | `github/review-flow/review-flow.mjs` | `.github/review-flow/review-flow.mjs`, unchanged |
 | `github/workflows/review-flow.yml` | `.github/workflows/review-flow.yml` |
 | `github/workflows/review-flow-gate.yml` | `.github/workflows/review-flow-gate.yml` |
+| `github/workflows/review-flow-review-event.yml` | `.github/workflows/review-flow-review-event.yml` |
 
 Replace `__OWNER__` with the repository owner and `__MARKETPLACE_REPO__` with the marketplace's `owner/repo`, including in `claude/settings.json`. Tailor `REVIEW.md` to what failure looks like in this project, and keep it short.
 
@@ -53,7 +54,7 @@ List these and do not attempt them:
 
 1. Add a `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` repository secret. `claude setup-token` creates the first.
 2. Install the Claude GitHub App, from `/install-github-app` or https://github.com/apps/claude.
-3. Merge these files to the default branch before relying on the gate. GitHub reads `pull_request_target` and `issue_comment` workflows from the default branch, and the gate reads its policy from the PR's base, so the PR that adds them cannot be gated by them.
+3. Merge these files to the default branch before relying on the gate. GitHub reads `pull_request_target`, `issue_comment` and `workflow_run` workflows from the default branch, and the gate reads its policy from the PR's base, so the PR that adds them cannot be gated by them.
 
 ## 5. Branch protection
 
@@ -79,4 +80,4 @@ The approval count is 0 because `review-flow/gate` enforces the number for each 
 
 ## 6. Finish
 
-Report what changed, what is left for the person, and how to try it: open a small PR, wait for `review-flow/gate`, then `/signoff <sha>` if a person is required.
+Report what changed, what is left for the person, and how to try it: open a small PR, wait for `review-flow/gate`, then comment `/signoff <full 40-character sha>` if a person is required.

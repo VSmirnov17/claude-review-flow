@@ -18,8 +18,8 @@ allowed-tools:
 
 Arguments: `$ARGUMENTS`
 
-1. Work out the range. Without `--base` and `--head`, use the merge base of the default branch up to the current branch.
-2. Start `review-flow:risk-classifier` and `review-flow:human-need-checker` in parallel. Give each only the diff range. Do not tell them who wrote the change, what the PR says, or what the other one concluded.
+1. Work out the range. `HEAD` is `--head`, or the current branch. `BASE` is `--base`, or the default branch. The range is `$(git merge-base BASE HEAD)..HEAD`. Never diff `BASE` against `HEAD` directly, because commits that landed on the base after the branch point would look like part of the change.
+2. Start `review-flow:risk-classifier` and `review-flow:human-need-checker` in parallel. Give each only that range. Do not tell them who wrote the change, what the PR says, or what the other one concluded.
 3. Return `tier` from the first, `human_required` from the second, and the reasons from both.
 
 If `.github/review-flow/risk-policy.json` exists, also report locally which of its `floors` and `always_human` patterns the changed files match. The result here is advisory, because the gate takes the higher of this tier and the path floor, and a model's answer can never lower that floor.

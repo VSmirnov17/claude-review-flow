@@ -15,9 +15,11 @@
   },
   "always_human": [
     ".github/**",
-    ".claude/**",
-    "CLAUDE.md",
-    "REVIEW.md",
+    "**/.claude/**",
+    ".mcp.json",
+    "**/CLAUDE.md",
+    "**/CLAUDE.local.md",
+    "**/REVIEW.md",
     "**/Dockerfile",
     "infra/**"
   ]

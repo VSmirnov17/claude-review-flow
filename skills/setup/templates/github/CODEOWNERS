@@ -1,7 +1,12 @@
 # Requests a review from these owners automatically.
 # Keep the paths in step with "always_human" in .github/review-flow/risk-policy.json.
+# A pattern without a leading slash matches at any depth.
 
-.github/    @__OWNER__
-.claude/    @__OWNER__
-CLAUDE.md   @__OWNER__
-REVIEW.md   @__OWNER__
+/.github/         @__OWNER__
+.claude/          @__OWNER__
+/.mcp.json        @__OWNER__
+CLAUDE.md         @__OWNER__
+CLAUDE.local.md   @__OWNER__
+REVIEW.md         @__OWNER__
+Dockerfile        @__OWNER__
+/infra/           @__OWNER__
